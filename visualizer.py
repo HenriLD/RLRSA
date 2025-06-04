@@ -1,6 +1,8 @@
 import pygame
 import sys
 import os
+import csv
+from datetime import datetime
 try:
     from environment import CooperativeChickenEnv
     from random_agents import run_random_agents_episode # Expects modified version
@@ -31,6 +33,8 @@ WALL_COLOR = (50, 50, 50) # Dark Grey
 BUTTON_COLOR = (100, 150, 200)
 BUTTON_HOVER_COLOR = (130, 180, 230)
 TEXT_COLOR = BLACK
+STATUS_SUCCESS_COLOR = (0, 128, 0) # Darker Green for success messages
+STATUS_ERROR_COLOR = RED
 
 # Fonts
 pygame.init() # Initialize Pygame early for font loading
@@ -281,6 +285,41 @@ class VisualizerApp:
         if event.type == pygame.USEREVENT + 1 and self.current_screen == "running_experiments":
             pygame.time.set_timer(pygame.USEREVENT + 1, 0) # Clear timer
             self._run_experiments_logic()
+    
+    def _export_metrics_to_csv(self):
+        if not self.dashboard_metrics or "error" in self.dashboard_metrics or not self.experiment_results:
+            self.status_message = "No metrics to export."; print("Export CSV: No metrics to export.")
+            pygame.time.set_timer(pygame.USEREVENT + 2, 3000, True)
+            return
+
+        now = datetime.now(); timestamp = now.strftime("%Y%m%d_%H%M%S")
+        grid_name_safe = "".join(c if c.isalnum() else "_" for c in self.selected_grid_key)
+        agent_name_safe = "".join(c if c.isalnum() else "_" for c in self.selected_agent_type)
+        filename = f"coop_chicken_metrics_{grid_name_safe}_{agent_name_safe}_{timestamp}.csv"
+
+        try:
+            with open(filename, 'w', newline='') as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(["Overall Summary Metrics"]); writer.writerow(["Metric", "Value"])
+                writer.writerow(["Agent Type", self.selected_agent_type])
+                writer.writerow(["Grid Configuration", self.selected_grid_key])
+                writer.writerow(["Episodes Run", self.dashboard_metrics.get("num_episodes", "N/A")])
+                writer.writerow(["Avg. Reward Agent 1", f"{self.dashboard_metrics.get('avg_r1', 0):.2f}"])
+                writer.writerow(["Avg. Reward Agent 2", f"{self.dashboard_metrics.get('avg_r2', 0):.2f}"])
+                writer.writerow(["Avg. Episode Length (Rounds)", f"{self.dashboard_metrics.get('avg_len', 0):.2f}"])
+                writer.writerow(["Total Captures", self.dashboard_metrics.get("captures", "N/A")])
+                writer.writerow(["Capture Rate", f"{self.dashboard_metrics.get('capture_rate', 0):.2%}"])
+                writer.writerow([]) 
+                writer.writerow(["Per-Episode Details"])
+                writer.writerow(["Episode No.", "Agent 1 Reward", "Agent 2 Reward", "Length (Rounds)", "Capture Occurred"])
+                for i, res in enumerate(self.experiment_results):
+                    capture_occurred = "No"
+                    if res.get("history") and res["history"][-1].get("terminated", False): capture_occurred = "Yes"
+                    writer.writerow([i + 1, f"{res.get('r1', 0):.2f}", f"{res.get('r2', 0):.2f}", res.get('length', 0), capture_occurred])
+            self.status_message = f"Exported to {filename}"; print(f"Metrics successfully exported to {filename}")
+        except IOError as e:
+            self.status_message = "Error exporting CSV."; print(f"Error exporting CSV: {e}")
+        pygame.time.set_timer(pygame.USEREVENT + 2, 5000, True) # Display message for 5s
 
 
     def _run_experiments_logic(self):
@@ -420,6 +459,13 @@ class VisualizerApp:
             btn.draw(self.screen)
 
         self.buttons["back_to_selection"].draw(self.screen)
+        self.buttons["export_csv"].draw(self.screen)
+
+        if self.status_message: # Display status message
+            is_success = "Exported to" in self.status_message or "successfully" in self.status_message
+            color = STATUS_SUCCESS_COLOR if is_success else STATUS_ERROR_COLOR
+            status_surf = FONT_SMALL.render(self.status_message, True, color)
+            self.screen.blit(status_surf, status_surf.get_rect(centerx=SIDE_PANEL_WIDTH // 2, bottom=SCREEN_HEIGHT - 10))
 
 
     def draw_replay_screen(self):
