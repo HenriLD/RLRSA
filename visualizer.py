@@ -1,14 +1,11 @@
 import pygame
 import sys
 import os
-
-# Ensure environment.py and random_agents.py can be imported
 try:
     from environment import CooperativeChickenEnv
     from random_agents import run_random_agents_episode # Expects modified version
 except ImportError as e:
     print(f"Error importing modules: {e}")
-    print("Ensure environment.py and random_agents.py are in the same directory or accessible via PYTHONPATH.")
     sys.exit(1)
 
 # --- Constants ---

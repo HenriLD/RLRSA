@@ -1,6 +1,4 @@
-# random_agents.py
 import gymnasium as gym
-# Assuming environment.py is in the same directory or accessible in PYTHONPATH
 from environment import CooperativeChickenEnv 
 
 def run_random_agents_episode(env, render_episode_to_console=False):
