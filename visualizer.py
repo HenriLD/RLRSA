@@ -193,6 +193,7 @@ class VisualizerApp:
 
         # Dashboard Screen
         self.buttons["back_to_selection"] = Button(20, SCREEN_HEIGHT - 70, 250, 50, "New Experiment Setup")
+        self.buttons["export_csv"] = Button(SIDE_PANEL_WIDTH // 2 - 125, SCREEN_HEIGHT - 80, 250, 40, "Export Metrics (CSV)")
         self.game_replay_buttons = [] 
 
         # Replay Screen
@@ -459,7 +460,7 @@ class VisualizerApp:
             btn.draw(self.screen)
 
         self.buttons["back_to_selection"].draw(self.screen)
-        self.buttons["export_csv"].draw(self.screen)
+        #self.buttons["export_csv"].draw(self.screen)
 
         if self.status_message: # Display status message
             is_success = "Exported to" in self.status_message or "successfully" in self.status_message
