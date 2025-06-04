@@ -1,131 +1,153 @@
 # random_agents.py
 import gymnasium as gym
-from environment import CooperativeChickenEnv # Assuming environment.py is in the same directory or accessible in PYTHONPATH
+# Assuming environment.py is in the same directory or accessible in PYTHONPATH
+from environment import CooperativeChickenEnv 
 
-def run_random_agents_episode(env, render_episode=True):
+def run_random_agents_episode(env, render_episode_to_console=False):
     """
     Runs a single episode with two random agents.
 
     Args:
         env: An instance of the CooperativeChickenEnv.
-        render_episode (bool): Whether to print the state of the environment at each step.
+        render_episode_to_console (bool): Whether to print the state of the environment to console.
 
     Returns:
-        tuple: (total_reward_agent1, total_reward_agent2, episode_length)
+        tuple: (total_reward_agent1, total_reward_agent2, episode_length, history_log)
+               history_log is a list of dictionaries, each detailing a step.
     """
     obs, info = env.reset()
-    if render_episode:
+    if render_episode_to_console:
         print("--- Initial State ---")
         print(env.render())
         print(f"Observation: {obs}")
         print(f"Info: {info}")
 
+    history_log = []
+    # Log initial state before any action
+    history_log.append({
+        'grid_render_str': env.render(), # For debug
+        'agent1_pos': env.agent1_pos,
+        'agent2_pos': env.agent2_pos,
+        'chicken_pos': env.chicken_pos,
+        'acting_agent': info.get("current_player_to_act", -1), 
+        'action_taken': None, 
+        'reward_received': 0, 
+        'total_reward_agent1_so_far': 0,
+        'total_reward_agent2_so_far': 0,
+        'terminated': False,
+        'truncated': False,
+        'info': info.copy(),
+        'round_step': env.current_step_in_episode, # Should be 0
+        'L': env.L, 'H': env.H, 'walls': list(env.walls) # Grid params for replay
+    })
+
     terminated = False
     truncated = False
     total_reward_agent1 = 0
     total_reward_agent2 = 0
-    episode_length = 0 # Counts full A1-A2-Chicken cycles
-
-    # The main loop runs as long as the episode is not done.
-    # The environment's step function handles the turn progression internally.
-    # We just need to ensure we're passing actions for the correct agent when it's their turn.
-    # The 'info' dict tells us whose turn it is.
-
-    current_loop_iter = 0 # To prevent infinite loops in case of unexpected issues
-    max_loop_iters = env.max_episode_steps * 3 + 10 # A safe upper bound for iterations
+    
+    current_loop_iter = 0
+    # max_loop_iters: agent1, agent2, (chicken is part of agent2's step) for each step in episode
+    # plus a small buffer. Max steps is for full A1-A2-C rounds.
+    max_loop_iters = env.max_episode_steps * 2 + 10 
 
     while not terminated and not truncated and current_loop_iter < max_loop_iters:
-        current_player_idx = info.get("current_player_to_act", -1)
+        current_player_idx_before_step = info.get("current_player_to_act", -1)
+        action_taken_this_step = None
+        reward_for_this_step = 0
 
-        if current_player_idx == 0 or current_player_idx == 1: # Agent 1 or Agent 2's turn
-            action = env.action_space.sample() # Choose a random action
+        if current_player_idx_before_step == 0 or current_player_idx_before_step == 1: # Agent's turn
+            action_taken_this_step = env.action_space.sample() 
 
-            if render_episode:
-                print(f"\n--- Round {env.current_step_in_episode + 1}, Agent {current_player_idx + 1} takes action: {action} ---")
+            if render_episode_to_console:
+                print(f"\n--- Round {env.current_step_in_episode + 1}, Agent {current_player_idx_before_step + 1} takes action: {action_taken_this_step} ---")
 
-            obs, reward, terminated, truncated, info = env.step(action)
-            episode_length = env.current_step_in_episode # Update based on full rounds completed
+            obs, reward_for_this_step, terminated, truncated, info = env.step(action_taken_this_step)
+            
+            if current_player_idx_before_step == 0:
+                total_reward_agent1 += reward_for_this_step
+            else: # current_player_idx_before_step == 1
+                total_reward_agent2 += reward_for_this_step
 
-            if current_player_idx == 0:
-                total_reward_agent1 += reward
-            else: # current_player_idx == 1
-                total_reward_agent2 += reward
-
-            if render_episode:
+            if render_episode_to_console:
                 print(env.render())
                 print(f"Observation: {obs}")
-                print(f"Reward for Agent {current_player_idx + 1}: {reward}")
+                print(f"Reward for Agent {current_player_idx_before_step + 1}: {reward_for_this_step}")
                 print(f"Terminated: {terminated}, Truncated: {truncated}")
                 print(f"Info: {info}")
                 print(f"Running Total Rewards: A1={total_reward_agent1}, A2={total_reward_agent2}")
-        else:
-            # This case should ideally not be reached if current_player_to_act is always 0 or 1
-            # when step is called by the agent script.
-            # If the game terminated in the previous step, the loop condition will catch it.
-            if render_episode:
-                print(f"\n--- Game ended or unexpected state: {info} ---")
-            break # Exit loop if game ended or state is unexpected
+        
+        else: # Game ended in previous step or unexpected state. Loop condition (term/trunc) should handle.
+            if render_episode_to_console:
+                print(f"\n--- Loop will exit. Current state: Terminated={terminated}, Truncated={truncated}, Info: {info} ---")
+            break 
 
+        # Log state AFTER action (and potential chicken move if agent 2 acted)
+        history_log.append({
+            'grid_render_str': env.render(),
+            'agent1_pos': env.agent1_pos,
+            'agent2_pos': env.agent2_pos,
+            'chicken_pos': env.chicken_pos,
+            'acting_agent': current_player_idx_before_step, # Agent that JUST acted
+            'action_taken': action_taken_this_step,
+            'reward_received': reward_for_this_step,
+            'total_reward_agent1_so_far': total_reward_agent1,
+            'total_reward_agent2_so_far': total_reward_agent2,
+            'terminated': terminated,
+            'truncated': truncated,
+            'info': info.copy(), 
+            'round_step': env.current_step_in_episode, # Updated after A1, A2, C cycle
+            'L': env.L, 'H': env.H, 'walls': list(env.walls)
+        })
+        
         current_loop_iter += 1
-        if current_loop_iter >= max_loop_iters and render_episode:
-            print("Warning: Reached maximum loop iterations for the episode.")
+        if current_loop_iter >= max_loop_iters:
+            if render_episode_to_console:
+                print("Warning: Reached maximum loop iterations for the episode.")
+            if not terminated and not truncated: # Force truncation if loop limit hit
+                truncated = True
+                history_log[-1]['truncated'] = True # Update last history entry
+                if 'status' not in history_log[-1]['info']: history_log[-1]['info']['status'] = "max_loop_iters_reached"
 
 
-    if render_episode:
+    final_episode_length = env.current_step_in_episode # Number of full A1-A2-Chicken rounds completed
+    if render_episode_to_console:
         print("\n--- Episode Ended ---")
-        if terminated:
-            print("Chicken caught!")
-        elif truncated:
-            print("Max episode steps reached.")
+        if terminated: print("Chicken caught!")
+        elif truncated: print("Max episode steps reached or loop limit hit.")
         print(f"Final Rewards: Agent1={total_reward_agent1}, Agent2={total_reward_agent2}")
-        print(f"Episode Length (full rounds): {episode_length}")
+        print(f"Episode Length (full rounds): {final_episode_length}")
 
-    return total_reward_agent1, total_reward_agent2, episode_length
+    return total_reward_agent1, total_reward_agent2, final_episode_length, history_log
 
 
 if __name__ == '__main__':
-    # Define some internal walls (optional)
-    # Walls are (row, col) tuples
     custom_walls = set([(1,1), (1,2), (2,1), (3,4), (4,3), (4,4), (5,1)])
-
-    # Create the environment instance
-    # You can adjust L, H, walls, and max_episode_steps as needed
     env_config = {
-        "L": 7,
-        "H": 7,
-        "internal_wall_coords": custom_walls,
-        "max_episode_steps": 50
+        "L": 7, "H": 7, "internal_wall_coords": custom_walls, "max_episode_steps": 10 # Short for testing
     }
     try:
-        env = CooperativeChickenEnv(**env_config)
+        test_env = CooperativeChickenEnv(**env_config)
     except ValueError as e:
         print(f"Error initializing environment: {e}")
         exit()
+    
+    print("Running one test episode with history logging (console render OFF)...")
+    r1, r2, length, history = run_random_agents_episode(test_env, render_episode_to_console=False)
+    print(f"Episode finished. A1 Reward: {r1}, A2 Reward: {r2}, Length: {length} rounds.")
+    print(f"Number of history steps recorded: {len(history)}")
+    if history:
+        print("Sample - First history step (initial state):")
+        for key, val in history[0].items():
+            if key not in ['grid_render_str', 'walls']: # Keep sample concise
+                 print(f"  {key}: {val}")
+        print("Sample - Last history step:")
+        for key, val in history[-1].items():
+            if key not in ['grid_render_str', 'walls']:
+                 print(f"  {key}: {val}")
 
-    num_episodes_to_run = 3
-    all_rewards_a1 = []
-    all_rewards_a2 = []
-    all_lengths = []
-
-    print(f"Running {num_episodes_to_run} episodes with random agents...")
-
-    for i in range(num_episodes_to_run):
-        print(f"\n\n<<<<<<<<<< Starting Episode {i + 1} >>>>>>>>>>")
-        # Set render_episode to True for the first episode, False for others to speed up
-        r1, r2, length = run_random_agents_episode(env, render_episode=(i == 0))
-        all_rewards_a1.append(r1)
-        all_rewards_a2.append(r2)
-        all_lengths.append(length)
-        print(f"<<<<<<<<<< Episode {i + 1} Finished. Rewards: A1={r1}, A2={r2}. Length: {length} >>>>>>>>>>")
-
-    env.close() # Good practice to close the environment
-
-    print("\n\n--- Simulation Summary ---")
-    print(f"Number of episodes: {num_episodes_to_run}")
-    if num_episodes_to_run > 0:
-        print(f"Average Reward Agent 1: {sum(all_rewards_a1) / num_episodes_to_run:.2f}")
-        print(f"Average Reward Agent 2: {sum(all_rewards_a2) / num_episodes_to_run:.2f}")
-        print(f"Average Episode Length: {sum(all_lengths) / num_episodes_to_run:.2f} rounds")
-
-        captures = sum(1 for r1, r2 in zip(all_rewards_a1, all_rewards_a2) if env.capture_reward + env.step_penalty in [r1, r2] or env.capture_reward in [r1,r2]) # Approximate check
-        print(f"Approximate number of captures: {captures} out of {num_episodes_to_run}")
+    # Example with console rendering enabled:
+    # print("\nRunning one test episode with console rendering ON...")
+    # test_env_render = CooperativeChickenEnv(**env_config) # Fresh env
+    # r1_render, r2_render, length_render, history_render = run_random_agents_episode(test_env_render, render_episode_to_console=True)
+    # print(f"\nRendered episode finished. A1 Reward: {r1_render}, A2 Reward: {r2_render}, Length: {length_render} rounds.")
