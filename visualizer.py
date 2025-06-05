@@ -5,7 +5,9 @@ import csv
 from datetime import datetime
 try:
     from environment import CooperativeChickenEnv
-    from random_agents import run_random_agents_episode # Expects modified version
+    from random_agents import run_random_agents_episode
+    from heuristic_agents import run_heuristic_agents_episode
+    from a_star_agents import run_a_star_agents_episode
 except ImportError as e:
     print(f"Error importing modules: {e}")
     sys.exit(1)
@@ -115,7 +117,7 @@ PREDEFINED_GRIDS = {
 }
 
 # --- Agent Types ---
-AGENT_TYPES = ["Random"] # Only "Random" for now
+AGENT_TYPES = ["Random", "Heuristic", "A*"] # Extend with more agent types as needed
 
 # --- UI Element Helper ---
 class Button:
@@ -326,22 +328,21 @@ class VisualizerApp:
     def _run_experiments_logic(self):
         grid_params = PREDEFINED_GRIDS[self.selected_grid_key]
         self.experiment_results = []
-        
         print(f"Starting experiments: Agent={self.selected_agent_type}, Grid={self.selected_grid_key} (L={grid_params['L']}, H={grid_params['H']}, MaxSteps={grid_params['max_steps']})")
-        for i in range(10): # Run 10 experiments
-            print(f"  Running episode {i+1}/10...")
-            env = CooperativeChickenEnv(
-                L=grid_params["L"], H=grid_params["H"],
-                internal_wall_coords=grid_params["walls"],
-                max_episode_steps=grid_params["max_steps"]
-            )
+        for i in range(10):
+            print(f"  Running episode {i+1}/10 for {self.selected_agent_type} agent...") # MODIFIED: Clarified agent type
+            env = CooperativeChickenEnv(L=grid_params["L"], H=grid_params["H"], internal_wall_coords=grid_params["walls"], max_episode_steps=grid_params["max_steps"])
+            
+            r1, r2, length, history = 0, 0, 0, [] # Initialize
             if self.selected_agent_type == "Random":
                 r1, r2, length, history = run_random_agents_episode(env, render_episode_to_console=False)
-                self.experiment_results.append({
-                    "r1": r1, "r2": r2, "length": length, "history": history,
-                    "L": env.L, "H": env.H, "walls": list(env.walls) # Store for replay
-                })
-            # TODO: Implement other agent types here
+            elif self.selected_agent_type == "Heuristic": # <<< MODIFIED: Added Heuristic agent logic
+                r1, r2, length, history = run_heuristic_agents_episode(env, render_episode_to_console=False)
+            elif self.selected_agent_type == "A*": 
+                r1, r2, length, history = run_a_star_agents_episode(env, render_episode_to_console=False)
+            # TODO: Implement other agent types here in future using elif
+            
+            self.experiment_results.append({"r1": r1, "r2": r2, "length": length, "history": history, "L": env.L, "H": env.H, "walls": list(env.walls)})
         
         self._calculate_dashboard_metrics()
         self._generate_game_replay_buttons()
@@ -404,15 +405,12 @@ class VisualizerApp:
     def draw_selection_screen(self):
         title_surf = FONT_LARGE.render("Cooperative Chicken Game - Experiment Setup", True, BLACK)
         self.screen.blit(title_surf, title_surf.get_rect(centerx=SCREEN_WIDTH // 2, y=20))
-
         self.screen.blit(self.agent_title_surf, self.agent_title_rect)
-        for agent_type in AGENT_TYPES:
+        for agent_type in AGENT_TYPES: 
             self.buttons[f"select_agent_{agent_type}"].draw(self.screen)
-
         self.screen.blit(self.grid_title_surf, self.grid_title_rect)
         for grid_name in PREDEFINED_GRIDS.keys():
             self.buttons[f"select_grid_{grid_name}"].draw(self.screen)
-
         self.buttons["run_experiments"].draw(self.screen)
 
     def draw_dashboard_screen(self):
@@ -589,12 +587,11 @@ class VisualizerApp:
 
 
 if __name__ == '__main__':
-    if not os.path.exists("environment.py"):
-        print("ERROR: environment.py not found. Make sure it's in the same directory as visualizer.py.")
+    required_files = ["environment.py", "random_agents.py", "heuristic_agents.py", "a_star_agents.py"] # Ensure these files are in the same directory
+    missing_files = [f for f in required_files if not os.path.exists(f)]
+    if missing_files:
+        for f_name in missing_files:
+            print(f"ERROR: {f_name} not found. Make sure it's in the same directory as visualizer.py.")
         sys.exit(1)
-    if not os.path.exists("random_agents.py"):
-        print("ERROR: random_agents.py not found. Make sure it's in the same directory as visualizer.py.")
-        sys.exit(1)
-        
     app = VisualizerApp()
     app.run()
