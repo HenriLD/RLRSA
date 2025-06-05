@@ -341,7 +341,7 @@ class VisualizerApp:
                     "r1": r1, "r2": r2, "length": length, "history": history,
                     "L": env.L, "H": env.H, "walls": list(env.walls) # Store for replay
                 })
-            # else: Implement other agent types here
+            # TODO: Implement other agent types here
         
         self._calculate_dashboard_metrics()
         self._generate_game_replay_buttons()
@@ -516,7 +516,7 @@ class VisualizerApp:
                 cell_rect = pygame.Rect(grid_offset_x + c_idx * cell_size, grid_offset_y + r_idx * cell_size, cell_size, cell_size)
                 pygame.draw.rect(self.screen, GREY, cell_rect, 1) 
                 if (r_idx, c_idx) in grid_walls:
-                    pygame.draw.rect(self.screen, WALL_COLOR, cell_rect.inflate(-2,-2)) # Slightly smaller fill
+                    pygame.draw.rect(self.screen, WALL_COLOR, cell_rect.inflate(-2,-2)) 
         
         entity_radius_ratio = 0.35 # Ratio of cell_size
         font_size_in_cell = int(cell_size * 0.5)

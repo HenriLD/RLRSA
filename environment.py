@@ -180,6 +180,12 @@ class CooperativeChickenEnv(gym.Env):
             reward += self.capture_reward
             terminated = True
 
+        # Check for agent collision
+        if self.agent1_pos == self.agent2_pos:
+            # Terminate if agents collide, applying a penalty
+            if self.current_player_idx == 0:
+                reward -= 100
+
         if terminated:
             observation = self._get_observation()
             info = {"current_player_to_act": -1, "status": "capture"} # Game ended
